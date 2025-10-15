@@ -1,0 +1,53 @@
+# docker-compose.yml
+
+version: '3.8'
+
+services:
+  # The PostgreSQL Database Service
+  db:
+    image: postgres:13
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=mypassword
+      - POSTGRES_DB=codereviews
+    ports:
+      - "5432:5432"
+
+  # The Redis Message Broker Service
+  redis:
+    image: redis:6.2-alpine
+
+  # The FastAPI Backend Service
+  backend:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./app:/app/app
+    ports:
+      - "8000:8000"
+    environment:
+      # We had this before, but now we add the Google key
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY} # <-- ADD THIS LINE
+    depends_on:
+      - db
+      - redis
+
+  # The Celery Worker Service
+  worker:
+    build: .
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    volumes:
+      - ./app:/app/app
+    environment:
+      # We had this before, but now we add the Google key
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY} # <-- AND ADD THIS LINE
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  pgdata:
